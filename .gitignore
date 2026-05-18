@@ -1,14 +1,45 @@
+# =============================================================================
 # Secrets — never commit
-.streamlit/secrets.toml
+# =============================================================================
+backend/.streamlit/secrets.toml
+backend/.env
+frontend/.env
+frontend/.env.local
+frontend/.env*.local
 
-# Python
+# =============================================================================
+# Python (backend)
+# =============================================================================
+backend/__pycache__/
+backend/*.py[cod]
+backend/*.egg-info/
+backend/.venv/
+backend/venv/
+backend/.pytest_cache/
+
+# Top-level too, in case venv lives there
 __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
 venv/
 
+# =============================================================================
+# Node.js (frontend)
+# =============================================================================
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.turbo/
+frontend/coverage/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# =============================================================================
 # OS / editors
+# =============================================================================
 .DS_Store
 .idea/
 .vscode/
