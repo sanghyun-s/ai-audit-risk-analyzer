@@ -23,6 +23,27 @@ const DEFAULT_FORM = {
   periodEnd: "2024-12-31",
 };
 
+/**
+ * Phase 4c — explicit 4-section workflow.
+ *
+ * Section 1 — Engagement Setup
+ *   Sidebar form (always visible while scrolling) + materiality preview
+ *   + CSV upload + Run button. Pre-analysis area.
+ *
+ * Section 2 — Data Quality & Risk Signals
+ *   Integrity panel (collapsible) + Feature firing panel (collapsible).
+ *   Compacted to 1-line summaries by default so the user can skim past
+ *   on a quick demo and expand for diagnostic depth.
+ *
+ * Section 3 — Risk Overview
+ *   Summary cards + tier distribution chart + top accounts chart.
+ *   The "is anything actually wrong, and where?" zone.
+ *
+ * Section 4 — Flagged Transaction Review
+ *   The flagged transactions table with per-row expanders that include
+ *   the full 7-field AI audit memo (when generated). The AI Narrative
+ *   is part of Section 4, not a separate Section 5.
+ */
 export default function Page() {
   const [options, setOptions] = React.useState(null);
   const [form, setForm]       = React.useState(DEFAULT_FORM);
@@ -51,9 +72,9 @@ export default function Page() {
         periodEnd: form.periodEnd,
       });
       setResult(data);
-      // Scroll to the integrity section once results land
+      // Scroll to the data-quality section once results land
       setTimeout(() => {
-        document.getElementById("results")?.scrollIntoView({ behavior: "smooth" });
+        document.getElementById("section-2")?.scrollIntoView({ behavior: "smooth" });
       }, 100);
     } catch (e) {
       setError(e.message);
@@ -64,7 +85,7 @@ export default function Page() {
   }
 
   return (
-    <main className="container py-8 space-y-6">
+    <main className="container py-8 space-y-8">
       <header className="space-y-1">
         <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
           <Search className="h-7 w-7" />
@@ -76,77 +97,128 @@ export default function Page() {
         </p>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
-        {/* Sidebar */}
-        <aside className="space-y-4">
-          <ClientProfileForm value={form} onChange={setForm} options={options} />
-          <div className="text-xs text-muted-foreground px-2">
-            Phases 1–3 + hybrid ML shipped. Phase 4a: GPT narrative layer (in progress).
-          </div>
-        </aside>
+      {/* ─────────────────────────────────────────────────────────────── */}
+      {/* Section 1 — Engagement Setup                                    */}
+      {/* ─────────────────────────────────────────────────────────────── */}
+      <section id="section-1" className="space-y-4">
+        <div className="space-y-1">
+          <h2 className="text-xl font-semibold tracking-tight">
+            Section 1 — Engagement Setup
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Client profile, materiality benchmark, and the GL CSV to analyze.
+          </p>
+        </div>
 
-        {/* Main panel */}
-        <section className="space-y-6">
-          <div className="space-y-2">
-            <h2 className="text-lg font-semibold">Materiality Thresholds</h2>
-            <MaterialityBanner
-              entityType={form.entityType}
-              benchmarkFigure={form.benchmarkFigure}
+        <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
+          {/* Sidebar form — stays visible while scrolling below */}
+          <aside className="space-y-4">
+            <ClientProfileForm value={form} onChange={setForm} options={options} />
+          </aside>
+
+          {/* Materiality preview + upload area */}
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <h3 className="text-base font-semibold">Materiality Thresholds</h3>
+              <MaterialityBanner
+                entityType={form.entityType}
+                benchmarkFigure={form.benchmarkFigure}
+              />
+              <p className="text-xs text-muted-foreground">
+                Methodology: FS materiality derives from the entity benchmark.
+                Performance and transaction materiality are auditor-judgment haircuts.
+              </p>
+            </div>
+
+            <CsvUpload
+              file={file}
+              onFileChange={setFile}
+              onRun={handleRun}
+              loading={loading}
+              requiredColumns={options?.required_columns}
             />
-            <p className="text-xs text-muted-foreground">
-              Methodology: FS materiality derives from the entity benchmark.
-              Performance and transaction materiality are auditor-judgment haircuts.
-            </p>
+
+            {error && (
+              <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+                {error}
+              </div>
+            )}
           </div>
+        </div>
+      </section>
 
-          <CsvUpload
-            file={file}
-            onFileChange={setFile}
-            onRun={handleRun}
-            loading={loading}
-            requiredColumns={options?.required_columns}
-          />
-
-          {error && (
-            <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
-              {error}
+      {/* Sections 2–4 only appear once analysis has run */}
+      {result && (
+        <>
+          {/* ─────────────────────────────────────────────────────────── */}
+          {/* Section 2 — Data Quality & Risk Signals                     */}
+          {/* ─────────────────────────────────────────────────────────── */}
+          <section id="section-2" className="space-y-4">
+            <div className="space-y-1">
+              <h2 className="text-xl font-semibold tracking-tight">
+                Section 2 — Data Quality & Risk Signals
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Pre-ML integrity checks and feature-firing counts. Click a panel
+                header to expand for full detail.
+              </p>
             </div>
-          )}
 
-          {result && (
-            <div id="results" className="space-y-6">
+            <div className="space-y-3">
               <IntegrityPanel integrity={result.integrity} />
-
               <FeatureFiringPanel featureFiring={result.feature_firing} />
-
-              <div className="space-y-3">
-                <h2 className="text-lg font-semibold">4. Isolation Forest + Materiality Filter</h2>
-                <SummaryCards summary={result.summary} />
-              </div>
-
-              <div className="space-y-3">
-                <h2 className="text-lg font-semibold">5. Risk Distribution</h2>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <RiskDistributionChart data={result.chart_data?.tier_distribution} />
-                  <TopAccountsChart data={result.chart_data?.top_accounts} />
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <h2 className="text-lg font-semibold">6. Flagged Transactions</h2>
-                <FlaggedTable
-                  rows={result.flagged_rows}
-                  entityContext={{
-                    entity_type: result.request?.entity_type,
-                    period_start: result.request?.period_start,
-                    period_end: result.request?.period_end,
-                  }}
-                />
-              </div>
             </div>
-          )}
-        </section>
-      </div>
+          </section>
+
+          {/* ─────────────────────────────────────────────────────────── */}
+          {/* Section 3 — Risk Overview                                   */}
+          {/* ─────────────────────────────────────────────────────────── */}
+          <section id="section-3" className="space-y-4">
+            <div className="space-y-1">
+              <h2 className="text-xl font-semibold tracking-tight">
+                Section 3 — Risk Overview
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Isolation Forest + materiality filter results, tier distribution,
+                and the accounts carrying the most flagged amount.
+              </p>
+            </div>
+
+            <SummaryCards summary={result.summary} />
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <RiskDistributionChart data={result.chart_data?.tier_distribution} />
+              <TopAccountsChart data={result.chart_data?.top_accounts} />
+            </div>
+          </section>
+
+          {/* ─────────────────────────────────────────────────────────── */}
+          {/* Section 4 — Flagged Transaction Review                      */}
+          {/* ─────────────────────────────────────────────────────────── */}
+          <section id="section-4" className="space-y-4">
+            <div className="space-y-1">
+              <h2 className="text-xl font-semibold tracking-tight">
+                Section 4 — Flagged Transaction Review
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Each flagged transaction with its active flags. Expand a row to
+                see the full AI audit memo (assertion, magnitude, likelihood,
+                control / COSO, and recommended procedures) once narratives are
+                generated.
+              </p>
+            </div>
+
+            <FlaggedTable
+              rows={result.flagged_rows}
+              entityContext={{
+                entity_type: result.request?.entity_type,
+                period_start: result.request?.period_start,
+                period_end: result.request?.period_end,
+              }}
+            />
+          </section>
+        </>
+      )}
     </main>
   );
 }

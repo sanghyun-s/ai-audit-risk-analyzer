@@ -46,6 +46,120 @@ function rowKey(r) {
   return `${r?.date || ""}|${r?.account_name || ""}|${r?.vendor || ""}|${r?.amount || ""}`;
 }
 
+/**
+ * The four "context" rows (materiality / anomaly / fraud-prob / override)
+ * that sit at the bottom of every expanded row — same content in both
+ * with-narrative and without-narrative cases. Extracted as a sub-component
+ * since the JSX was identical in both branches and the duplication added
+ * noise to the expander logic.
+ */
+function ContextFields({ row }) {
+  return (
+    <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-muted-foreground">
+      <div>Materiality: {row.materiality_annotation || "—"}</div>
+      <div>Anomaly score: {row.anomaly_score?.toFixed(3) ?? "—"}</div>
+      <div>
+        Fraud probability:{" "}
+        {row.fraud_probability != null ? row.fraud_probability.toFixed(2) : "—"}
+      </div>
+      <div>Qualitative override: {row.is_qualitative_override ? "Yes" : "No"}</div>
+      {row.qualitative_override_note && (
+        <div className="col-span-2 italic">{row.qualitative_override_note}</div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Phase 4c — card-with-hierarchy display of the full 7-field audit memo.
+ *
+ * Visual hierarchy (top to bottom):
+ *   1. Header strip: AI Risk Summary label + GPT/Fallback badge
+ *   2. Large risk_summary paragraph (the headline finding)
+ *   3. 2x2 grid of structured fields (assertion / magnitude / likelihood / COSO)
+ *   4. Recommended follow-up: bulleted list of audit procedures
+ *   5. Muted small disclaimer
+ *
+ * Field presence is defensive: any field can be absent (e.g., a stale
+ * Phase 4a-shape narrative) and the corresponding block is omitted
+ * gracefully rather than crashing.
+ */
+function NarrativeCard({ narrative }) {
+  const {
+    risk_summary,
+    assertion_consideration,
+    magnitude_assessment,
+    likelihood_assessment,
+    control_or_coso_consideration,
+    recommended_follow_up,
+    disclaimer,
+    narrative_status,
+  } = narrative;
+
+  const structuredFields = [
+    { label: "Assertion Consideration",  value: assertion_consideration },
+    { label: "Magnitude Assessment",     value: magnitude_assessment },
+    { label: "Likelihood Assessment",    value: likelihood_assessment },
+    { label: "Control / COSO Consideration", value: control_or_coso_consideration },
+  ].filter((f) => !!f.value);
+
+  return (
+    <div className="rounded-lg border bg-background p-4 space-y-4">
+      {/* Header strip */}
+      <div className="flex items-center gap-2 text-xs">
+        <Sparkles className="h-3.5 w-3.5 text-blue-500" />
+        <span className="font-medium">AI Risk Summary</span>
+        <Badge
+          variant={narrative_status === "GPT" ? "secondary" : "outline"}
+          className="text-[10px]"
+        >
+          {narrative_status}
+        </Badge>
+      </div>
+
+      {/* Headline finding — risk_summary in larger text */}
+      {risk_summary && (
+        <p className="text-sm leading-relaxed text-foreground">{risk_summary}</p>
+      )}
+
+      {/* 2x2 structured fields grid */}
+      {structuredFields.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t">
+          {structuredFields.map((f) => (
+            <div key={f.label} className="space-y-1">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {f.label}
+              </p>
+              <p className="text-xs leading-relaxed text-foreground">{f.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Recommended follow-up — bulleted list */}
+      {Array.isArray(recommended_follow_up) && recommended_follow_up.length > 0 && (
+        <div className="space-y-1 pt-2 border-t">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Recommended Follow-up
+          </p>
+          <ul className="text-xs leading-relaxed text-foreground list-disc pl-5 space-y-0.5">
+            {recommended_follow_up.map((item, j) => (
+              <li key={j}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Muted disclaimer */}
+      {disclaimer && (
+        <p className="text-[10px] italic text-muted-foreground/80 pt-2 border-t">
+          {disclaimer}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function FlaggedTable({ rows, entityContext }) {
   const [page, setPage] = React.useState(0);
   const [expanded, setExpanded] = React.useState(() => new Set());
@@ -136,7 +250,11 @@ export default function FlaggedTable({ rows, entityContext }) {
       "is_year_end_concentration", "is_non_standard_pattern",
     ].filter((c) => rows[0] && c in rows[0]);
 
-    // Phase 4a — if narratives exist, add risk_summary + narrative_status
+    // Phase 4a CSV behavior preserved (deferred to Phase 5): when
+    // narratives exist, append narrative_status + risk_summary columns.
+    // The other 6 Phase 4b memo fields are not exported in 4c; that
+    // expansion is deliberately deferred to keep the CSV demoable in
+    // its current shape until the broader output review.
     const hasAnyNarrative = Object.keys(narrativesByKey).length > 0;
     const cols = hasAnyNarrative
       ? [...baseCols, "narrative_status", "risk_summary"]
@@ -172,7 +290,7 @@ export default function FlaggedTable({ rows, entityContext }) {
         </Button>
       </CardHeader>
       <CardContent>
-        {/* Phase 4a — narrative controls */}
+        {/* Narrative controls — Phase 4a (unchanged in 4c) */}
         <div className="flex flex-wrap items-center gap-3 mb-3 p-3 rounded-md border bg-muted/30">
           <div className="flex items-center gap-2">
             <label htmlFor="topN" className="text-xs font-medium text-muted-foreground">
@@ -257,7 +375,10 @@ export default function FlaggedTable({ rows, entityContext }) {
                       <td className="px-3 py-2 whitespace-nowrap">
                         {r.vendor}
                         {hasNarrative && (
-                          <Sparkles className="inline-block h-3 w-3 ml-1 text-blue-500" aria-label="AI narrative available" />
+                          <Sparkles
+                            className="inline-block h-3 w-3 ml-1 text-blue-500"
+                            aria-label="AI narrative available"
+                          />
                         )}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-right">{fmtAmount(r.amount)}</td>
@@ -276,47 +397,23 @@ export default function FlaggedTable({ rows, entityContext }) {
                         <td></td>
                         <td colSpan={9} className="px-3 py-3">
                           {hasNarrative ? (
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2 text-xs">
-                                <Sparkles className="h-3 w-3 text-blue-500" />
-                                <span className="font-medium">AI Risk Summary</span>
-                                <Badge
-                                  variant={narrative.narrative_status === "GPT" ? "secondary" : "outline"}
-                                  className="text-[10px]"
-                                >
-                                  {narrative.narrative_status}
-                                </Badge>
-                              </div>
-                              <p className="text-sm leading-relaxed">
-                                {narrative.risk_summary}
-                              </p>
-                              {/* Reveal the additional row context that's hidden from the main columns */}
-                              <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-muted-foreground pt-2 border-t border-muted">
-                                <div>Materiality: {r.materiality_annotation || "—"}</div>
-                                <div>Anomaly score: {r.anomaly_score?.toFixed(3) ?? "—"}</div>
-                                <div>Fraud probability: {r.fraud_probability != null ? r.fraud_probability.toFixed(2) : "—"}</div>
-                                <div>Qualitative override: {r.is_qualitative_override ? "Yes" : "No"}</div>
-                                {r.qualitative_override_note && (
-                                  <div className="col-span-2 italic">
-                                    {r.qualitative_override_note}
-                                  </div>
-                                )}
+                            <div className="space-y-3">
+                              {/* Phase 4c: card-with-hierarchy 7-field memo */}
+                              <NarrativeCard narrative={narrative} />
+
+                              {/* Context fields stay at the bottom (decision a) */}
+                              <div className="pt-2 border-t border-muted">
+                                <ContextFields row={r} />
                               </div>
                             </div>
                           ) : (
                             <div className="text-xs text-muted-foreground">
-                              No AI narrative yet for this row. Click <span className="font-medium">Generate AI Narrative</span> above
-                              to produce risk summaries for the top {topN} most demo-relevant flagged transactions.
-                              <div className="grid grid-cols-2 gap-x-6 gap-y-1 mt-2 pt-2 border-t border-muted">
-                                <div>Materiality: {r.materiality_annotation || "—"}</div>
-                                <div>Anomaly score: {r.anomaly_score?.toFixed(3) ?? "—"}</div>
-                                <div>Fraud probability: {r.fraud_probability != null ? r.fraud_probability.toFixed(2) : "—"}</div>
-                                <div>Qualitative override: {r.is_qualitative_override ? "Yes" : "No"}</div>
-                                {r.qualitative_override_note && (
-                                  <div className="col-span-2 italic">
-                                    {r.qualitative_override_note}
-                                  </div>
-                                )}
+                              No AI narrative yet for this row. Click{" "}
+                              <span className="font-medium">Generate AI Narrative</span> above
+                              to produce risk summaries for the top {topN} most demo-relevant
+                              flagged transactions.
+                              <div className="mt-2 pt-2 border-t border-muted">
+                                <ContextFields row={r} />
                               </div>
                             </div>
                           )}
