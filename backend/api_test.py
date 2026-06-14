@@ -54,7 +54,7 @@ def main():
     check("options has detection_sensitivities",
           "Balanced (0.05)" in opts["detection_sensitivities"])
     check("options exposes narrative.default_top_n",
-          opts.get("narrative", {}).get("default_top_n") == 5)
+          opts.get("narrative", {}).get("default_top_n") == 10)
     check("options exposes narrative.max_top_n",
           opts.get("narrative", {}).get("max_top_n") == 20)
 

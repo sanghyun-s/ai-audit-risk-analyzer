@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Download, Sparkles, ChevronRight, ChevronDown, Loader2 } from "lucide-react";
+import { generateNarratives as requestNarratives } from "@/lib/api";
 
 const PAGE_SIZE = 25;
 const NARRATIVE_DEFAULT_TOP_N = 10;
@@ -47,11 +48,16 @@ function rowKey(r) {
 }
 
 /**
- * The four "context" rows (materiality / anomaly / fraud-prob / override)
+ * The four "context" rows (materiality / anomaly / similarity / override)
  * that sit at the bottom of every expanded row — same content in both
  * with-narrative and without-narrative cases. Extracted as a sub-component
  * since the JSX was identical in both branches and the duplication added
  * noise to the expander logic.
+ *
+ * Note: the underlying field is still `fraud_probability` (internal name),
+ * but it is a risk-pattern similarity score — how closely a row resembles
+ * the rule-flagged population in feature space — NOT a probability of fraud.
+ * The user-facing label reflects that.
  */
 function ContextFields({ row }) {
   return (
@@ -59,7 +65,7 @@ function ContextFields({ row }) {
       <div>Materiality: {row.materiality_annotation || "—"}</div>
       <div>Anomaly score: {row.anomaly_score?.toFixed(3) ?? "—"}</div>
       <div>
-        Fraud probability:{" "}
+        Risk-Pattern Similarity:{" "}
         {row.fraud_probability != null ? row.fraud_probability.toFixed(2) : "—"}
       </div>
       <div>Qualitative override: {row.is_qualitative_override ? "Yes" : "No"}</div>
@@ -193,24 +199,18 @@ export default function FlaggedTable({ rows, entityContext }) {
     });
   };
 
+  // Transport now lives in lib/api.js (generateNarratives), matching how
+  // analyze() is structured. This handler owns only the UI state: loading,
+  // key-mapping, meta, and auto-expand.
   const generateNarratives = async () => {
     setNarrativeLoading(true);
     setNarrativeError(null);
     try {
-      const resp = await fetch("/api/narratives", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          rows,
-          entity_context: entityContext || {},
-          top_n: topN,
-        }),
+      const data = await requestNarratives({
+        rows,
+        entityContext,
+        topN,
       });
-      if (!resp.ok) {
-        const errText = await resp.text();
-        throw new Error(`Server returned ${resp.status}: ${errText.slice(0, 200)}`);
-      }
-      const data = await resp.json();
       // Map narratives back to row keys so we can look them up per-row
       const byKey = {};
       (data.selected_row_keys || []).forEach((k) => {
@@ -250,23 +250,39 @@ export default function FlaggedTable({ rows, entityContext }) {
       "is_year_end_concentration", "is_non_standard_pattern",
     ].filter((c) => rows[0] && c in rows[0]);
 
-    // Phase 4a CSV behavior preserved (deferred to Phase 5): when
-    // narratives exist, append narrative_status + risk_summary columns.
-    // The other 6 Phase 4b memo fields are not exported in 4c; that
-    // expansion is deliberately deferred to keep the CSV demoable in
-    // its current shape until the broader output review.
+    // When narratives exist, append narrative_status + all 7 memo fields
+    // so the full audit reasoning travels into the user's workpapers.
+    // recommended_follow_up is a list — joined with "; " for a single CSV cell.
+    const narrativeCols = [
+      "narrative_status",
+      "risk_summary",
+      "assertion_consideration",
+      "magnitude_assessment",
+      "likelihood_assessment",
+      "control_or_coso_consideration",
+      "recommended_follow_up",
+      "disclaimer",
+    ];
     const hasAnyNarrative = Object.keys(narrativesByKey).length > 0;
-    const cols = hasAnyNarrative
-      ? [...baseCols, "narrative_status", "risk_summary"]
-      : baseCols;
+    const cols = hasAnyNarrative ? [...baseCols, ...narrativeCols] : baseCols;
 
     const enriched = rows.map((r) => {
+      if (!hasAnyNarrative) return r;
       const n = narrativesByKey[rowKey(r)];
-      return hasAnyNarrative ? {
+      return {
         ...r,
         narrative_status: n ? n.narrative_status : "Not generated",
         risk_summary: n ? n.risk_summary : "",
-      } : r;
+        assertion_consideration: n ? n.assertion_consideration : "",
+        magnitude_assessment: n ? n.magnitude_assessment : "",
+        likelihood_assessment: n ? n.likelihood_assessment : "",
+        control_or_coso_consideration: n ? n.control_or_coso_consideration : "",
+        recommended_follow_up:
+          n && Array.isArray(n.recommended_follow_up)
+            ? n.recommended_follow_up.join("; ")
+            : "",
+        disclaimer: n ? n.disclaimer : "",
+      };
     });
 
     const csv = toCsv(enriched, cols);
@@ -349,6 +365,8 @@ export default function FlaggedTable({ rows, entityContext }) {
                 <th className="px-3 py-2 font-medium">PCAOB Label</th>
                 <th className="px-3 py-2 font-medium text-center">Control Gap</th>
                 <th className="px-3 py-2 font-medium text-center">Fraud Risk</th>
+                <th className="px-3 py-2 font-medium text-center">Override</th>
+                <th className="px-3 py-2 font-medium text-right">Similarity</th>
                 <th className="px-3 py-2 font-medium">Active Flags</th>
               </tr>
             </thead>
@@ -390,12 +408,18 @@ export default function FlaggedTable({ rows, entityContext }) {
                       <td className="px-3 py-2 text-center">
                         {r.fraud_risk_flag ? <Badge variant="danger">⚠</Badge> : "—"}
                       </td>
+                      <td className="px-3 py-2 text-center">
+                        {r.is_qualitative_override ? <Badge variant="warning">Override</Badge> : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right whitespace-nowrap">
+                        {r.fraud_probability != null ? r.fraud_probability.toFixed(2) : "—"}
+                      </td>
                       <td className="px-3 py-2 text-muted-foreground">{r.active_flags}</td>
                     </tr>
                     {isExpanded && (
                       <tr className="border-t bg-muted/20">
                         <td></td>
-                        <td colSpan={9} className="px-3 py-3">
+                        <td colSpan={11} className="px-3 py-3">
                           {hasNarrative ? (
                             <div className="space-y-3">
                               {/* Phase 4c: card-with-hierarchy 7-field memo */}

@@ -221,7 +221,7 @@ def apply_supervised_escalation(
         return final_tier, 0, ""
 
     note = (
-        f"Escalated to {escalated}: supervised classifier P(fraud)={fp:.2f} "
+        f"Escalated to {escalated}: risk-pattern similarity={fp:.2f} "
         f">= {threshold:.2f}. Pattern resembles rule-flagged transactions "
         f"in continuous features."
     )

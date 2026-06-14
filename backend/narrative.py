@@ -68,7 +68,7 @@ logger = logging.getLogger("app3.narrative")
 
 # Maximum top_n cap. Phase 4 spec sets this at 20.
 MAX_TOP_N: int = 20
-DEFAULT_TOP_N: int = 5
+DEFAULT_TOP_N: int = 10
 
 # OpenAI call settings.
 OPENAI_MODEL: str = "gpt-4o-mini"

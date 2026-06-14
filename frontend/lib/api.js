@@ -40,3 +40,28 @@ export async function analyze({
   }
   return r.json();
 }
+
+// Generate Top-N audit memos for already-flagged rows. Mirrors analyze():
+// owns the transport only; callers handle UI state and response mapping.
+export async function generateNarratives({ rows, entityContext, topN }) {
+  const r = await fetch("/api/narratives", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      rows,
+      entity_context: entityContext || {},
+      top_n: topN,
+    }),
+  });
+
+  if (!r.ok) {
+    let detail;
+    try {
+      detail = (await r.json()).detail;
+    } catch {
+      detail = await r.text();
+    }
+    throw new Error(`Narrative generation failed (${r.status}): ${detail}`);
+  }
+  return r.json();
+}
