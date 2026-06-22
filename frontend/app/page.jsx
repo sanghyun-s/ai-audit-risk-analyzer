@@ -12,6 +12,9 @@ import SummaryCards        from "@/components/SummaryCards";
 import RiskDistributionChart from "@/components/RiskDistributionChart";
 import TopAccountsChart    from "@/components/TopAccountsChart";
 import FlaggedTable        from "@/components/FlaggedTable";
+import BusinessContextCard from "@/components/BusinessContextCard";
+import DataProvenanceNote from "@/components/DataProvenanceNote";
+import DataDictionary from "@/components/DataDictionary";
 
 import { analyze, fetchOptions } from "@/lib/api";
 
@@ -24,25 +27,19 @@ const DEFAULT_FORM = {
 };
 
 /**
- * Phase 4c — explicit 4-section workflow.
+ * Phase 5A — business-context & explainability refactor over the existing
+ * four-section workflow. The engine is untouched; this layer reframes the
+ * page so a non-technical reviewer can tell what it's for, what each signal
+ * means, and what evidence to request.
  *
- * Section 1 — Engagement Setup
- *   Sidebar form (always visible while scrolling) + materiality preview
- *   + CSV upload + Run button. Pre-analysis area.
- *
- * Section 2 — Data Quality & Risk Signals
- *   Integrity panel (collapsible) + Feature firing panel (collapsible).
- *   Compacted to 1-line summaries by default so the user can skim past
- *   on a quick demo and expand for diagnostic depth.
- *
- * Section 3 — Risk Overview
- *   Summary cards + tier distribution chart + top accounts chart.
- *   The "is anything actually wrong, and where?" zone.
- *
- * Section 4 — Flagged Transaction Review
- *   The flagged transactions table with per-row expanders that include
- *   the full 7-field AI audit memo (when generated). The AI Narrative
- *   is part of Section 4, not a separate Section 5.
+ *   Header           ARGUS + business subtitle
+ *   Business Context what it's for / input / output / not for
+ *   Section 1        Review Context & Input File   (+ data-provenance note)
+ *   Section 2        Data Quality Check
+ *   Section 3        Review Queue Summary
+ *   Section 4        Flagged Transactions & Evidence Requests (+ Signal Guide link)
+ *   Section 5        How to Read ARGUS Signals     (collapsible data dictionary)
+ *   Disclaimer       the honesty boundary
  */
 export default function Page() {
   const [options, setOptions] = React.useState(null);
@@ -92,24 +89,29 @@ export default function Page() {
           ARGUS
         </h1>
         <p className="text-sm font-medium text-foreground">
-          Audit Risk Guidance · Unified System
+          Audit Review Packet
         </p>
-        <p className="text-sm text-muted-foreground">
-          ML anomaly detection + materiality-calibrated risk scoring + PCAOB-aligned
-          labels for QuickBooks general ledgers.
+        <p className="text-sm text-muted-foreground max-w-3xl">
+          Narrow a full general-ledger export into a prioritized review queue — see
+          what to check, why it matters, and what evidence to request — before close,
+          CPA handoff, audit readiness, or investor diligence.
         </p>
       </header>
 
+      {/* Business use case — answers "what is this for?" before the workflow */}
+      <BusinessContextCard />
+
       {/* ─────────────────────────────────────────────────────────────── */}
-      {/* Section 1 — Engagement Setup                                    */}
+      {/* Section 1 — Review Context & Input File                         */}
       {/* ─────────────────────────────────────────────────────────────── */}
       <section id="section-1" className="space-y-4">
         <div className="space-y-1">
           <h2 className="text-xl font-semibold tracking-tight">
-            Section 1 — Engagement Setup
+            Section 1 — Review Context & Input File
           </h2>
           <p className="text-sm text-muted-foreground">
-            Client profile, materiality benchmark, and the GL CSV to analyze.
+            Define the review context — client profile, materiality benchmark, and the
+            general-ledger export to review.
           </p>
         </div>
 
@@ -141,6 +143,9 @@ export default function Page() {
               requiredColumns={options?.required_columns}
             />
 
+            {/* Where did this data come from? — visible at the upload */}
+            <DataProvenanceNote fileName={file?.name} />
+
             {error && (
               <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
                 {error}
@@ -154,16 +159,16 @@ export default function Page() {
       {result && (
         <>
           {/* ─────────────────────────────────────────────────────────── */}
-          {/* Section 2 — Data Quality & Risk Signals                     */}
+          {/* Section 2 — Data Quality Check                              */}
           {/* ─────────────────────────────────────────────────────────── */}
           <section id="section-2" className="space-y-4">
             <div className="space-y-1">
               <h2 className="text-xl font-semibold tracking-tight">
-                Section 2 — Data Quality & Risk Signals
+                Section 2 — Data Quality Check
               </h2>
               <p className="text-sm text-muted-foreground">
-                Pre-ML integrity checks and feature-firing counts. Click a panel
-                header to expand for full detail.
+                Pre-review data-quality checks and the review signals found in the
+                file. Click a panel header to expand for full detail.
               </p>
             </div>
 
@@ -174,16 +179,17 @@ export default function Page() {
           </section>
 
           {/* ─────────────────────────────────────────────────────────── */}
-          {/* Section 3 — Risk Overview                                   */}
+          {/* Section 3 — Review Queue Summary                            */}
           {/* ─────────────────────────────────────────────────────────── */}
           <section id="section-3" className="space-y-4">
             <div className="space-y-1">
               <h2 className="text-xl font-semibold tracking-tight">
-                Section 3 — Risk Overview
+                Section 3 — Review Queue Summary
               </h2>
               <p className="text-sm text-muted-foreground">
-                Isolation Forest + materiality filter results, tier distribution,
-                and the accounts carrying the most flagged amount.
+                What the review produced: how many transactions were flagged for
+                follow-up, how they break down by priority, and where the flagged
+                amounts concentrate.
               </p>
             </div>
 
@@ -196,18 +202,26 @@ export default function Page() {
           </section>
 
           {/* ─────────────────────────────────────────────────────────── */}
-          {/* Section 4 — Flagged Transaction Review                      */}
+          {/* Section 4 — Flagged Transactions & Evidence Requests        */}
           {/* ─────────────────────────────────────────────────────────── */}
           <section id="section-4" className="space-y-4">
             <div className="space-y-1">
               <h2 className="text-xl font-semibold tracking-tight">
-                Section 4 — Flagged Transaction Review
+                Section 4 — Flagged Transactions & Evidence Requests
               </h2>
               <p className="text-sm text-muted-foreground">
-                Each flagged transaction with its active flags. Expand a row to
-                see the full AI audit memo (assertion, magnitude, likelihood,
-                control / COSO, and recommended procedures) once narratives are
-                generated.
+                Each flagged transaction with its review signals. Expand a row for the
+                full review memo — assertion, magnitude, likelihood, control / COSO,
+                and the evidence to request — once narratives are generated.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Not sure what a signal means?{" "}
+                <a
+                  href="#signal-guide"
+                  className="underline underline-offset-2 hover:text-foreground"
+                >
+                  View the Signal Guide ↓
+                </a>
               </p>
             </div>
 
@@ -222,6 +236,21 @@ export default function Page() {
           </section>
         </>
       )}
+
+      {/* ─────────────────────────────────────────────────────────────── */}
+      {/* Section 5 — How to Read ARGUS Signals  (always available)       */}
+      {/* ─────────────────────────────────────────────────────────────── */}
+      <DataDictionary />
+
+      {/* Honesty boundary — what ARGUS does not do */}
+      <footer className="rounded-md border border-muted bg-muted/30 p-4">
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          ARGUS indicates review priority; it does not conclude. It does not prepare
+          financial statements, perform an audit, issue an audit opinion, or detect or
+          conclude fraud. It narrows a general-ledger population and explains why
+          selected transactions deserve attention, leaving all judgment to the reviewer.
+        </p>
+      </footer>
     </main>
   );
 }

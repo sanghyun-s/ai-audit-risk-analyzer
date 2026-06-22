@@ -362,9 +362,9 @@ export default function FlaggedTable({ rows, entityContext }) {
                 <th className="px-3 py-2 font-medium">Vendor</th>
                 <th className="px-3 py-2 font-medium text-right">Amount</th>
                 <th className="px-3 py-2 font-medium">Final Tier</th>
-                <th className="px-3 py-2 font-medium">PCAOB Label</th>
-                <th className="px-3 py-2 font-medium text-center">Control Gap</th>
-                <th className="px-3 py-2 font-medium text-center">Fraud Risk</th>
+                <th className="px-3 py-2 font-medium">Audit Review Label</th>
+                <th className="px-3 py-2 font-medium text-center">Control Signal</th>
+                <th className="px-3 py-2 font-medium text-center">Co-occurrence</th>
                 <th className="px-3 py-2 font-medium text-center">Override</th>
                 <th className="px-3 py-2 font-medium text-right">Similarity</th>
                 <th className="px-3 py-2 font-medium">Active Flags</th>
@@ -406,7 +406,7 @@ export default function FlaggedTable({ rows, entityContext }) {
                       <td className="px-3 py-2">{r.pcaob_label}</td>
                       <td className="px-3 py-2 text-center">{r.control_gap_score}</td>
                       <td className="px-3 py-2 text-center">
-                        {r.fraud_risk_flag ? <Badge variant="danger">⚠</Badge> : "—"}
+                        {r.fraud_risk_flag ? <Badge variant="warning">Yes</Badge> : "—"}
                       </td>
                       <td className="px-3 py-2 text-center">
                         {r.is_qualitative_override ? <Badge variant="warning">Override</Badge> : "—"}
